@@ -1,65 +1,44 @@
 package internal
 
 import (
+	"flag"
 	"github.com/gin-gonic/gin"
+	"log"
 	"net/http"
 )
 
-var db = make(map[string]string)
+var searchEngineType = flag.String("engine", "bleve", "search engine type 'bleve'")
 
 func SetupRouter() *gin.Engine {
-	// Disable Console Color
-	// gin.DisableConsoleColor()
+	flag.Parse()
 	r := gin.Default()
+
+	var db SearchEngine
+	if *searchEngineType == "bleve" {
+		db = &BleveDB{bleveIndex: nil}
+		err := db.Setup()
+		if err != nil {
+			log.Fatal("error initialising bleve search index")
+			return nil
+		}
+	} else {
+		db = &NilDB{}
+	}
 
 	// Ping test
 	r.GET("/ping", func(c *gin.Context) {
 		c.String(http.StatusOK, "pong")
 	})
 
-	// Get user value
-	r.GET("/user/:name", func(c *gin.Context) {
-		user := c.Params.ByName("name")
-		value, ok := db[user]
-		if ok {
-			c.JSON(http.StatusOK, gin.H{"user": user, "value": value})
+	// Search using query
+	r.GET("/search/:query", func(c *gin.Context) {
+		query := c.Params.ByName("query")
+		log.Print("here is the query: ", query)
+		value, err := db.Search(query)
+		if err == nil {
+			c.JSON(http.StatusOK, gin.H{"query": query, "value": value})
 		} else {
-			c.JSON(http.StatusOK, gin.H{"user": user, "status": "no value"})
-		}
-	})
-
-	// Authorized group (uses gin.BasicAuth() middleware)
-	// Same than:
-	// authorized := r.Group("/")
-	// authorized.Use(gin.BasicAuth(gin.Credentials{
-	//	  "foo":  "bar",
-	//	  "manu": "123",
-	//}))
-	authorized := r.Group("/", gin.BasicAuth(gin.Accounts{
-		"foo":  "bar", // user:foo password:bar
-		"manu": "123", // user:manu password:123
-	}))
-
-	/* example curl for /admin with basicauth header
-	   Zm9vOmJhcg== is base64("foo:bar")
-
-		curl -X POST \
-	  	http://localhost:8080/admin \
-	  	-H 'authorization: Basic Zm9vOmJhcg==' \
-	  	-H 'content-type: application/json' \
-	  	-d '{"value":"bar"}'
-	*/
-	authorized.POST("admin", func(c *gin.Context) {
-		user := c.MustGet(gin.AuthUserKey).(string)
-
-		// Parse JSON
-		var json struct {
-			Value string `json:"value" binding:"required"`
-		}
-
-		if c.Bind(&json) == nil {
-			db[user] = json.Value
-			c.JSON(http.StatusOK, gin.H{"status": "ok"})
+			c.JSON(http.StatusOK, gin.H{"query": query, "status": "nothing found"})
 		}
 	})
 
