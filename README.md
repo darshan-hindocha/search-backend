@@ -22,7 +22,7 @@ eventually db will include the users, collections and extracts, and a fine-grain
 
 ### internal/db/bleve
 
-pycharm very kindly reminds me that bleve is a typo, but it's not.
+goland very kindly reminds me that bleve is a typo, but it's not.
 
 the `internal/db/bleve/*` has everything we need to implement bleve as a search engine within the db.
 
